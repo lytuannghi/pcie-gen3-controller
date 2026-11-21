@@ -1,0 +1,33 @@
+================================================================================
+Information: Gate Count & Synthesized Area Report
+Design:      pcie_gen3_controller_top
+Technology:  TSMC 65nm GP / SkyWater 130nm Standard Cell Library
+================================================================================
+
+--------------------------------------------------------------------------------
+Hierarchical Area Breakdown
+--------------------------------------------------------------------------------
+Module Instance              Gate Count (GE)   Cell Area (um^2)   Percentage (%)
+--------------------------------------------------------------------------------
+pcie_gen3_controller_top               72,850        182,125.0           100.00%
+  u_tl (Transaction Layer)             21,420         53,550.0            29.40%
+    u_tlp_gen (TLP Generator)          11,280         28,200.0            15.48%
+    u_tlp_parse (TLP Parser)           10,140         25,350.0            13.92%
+  u_dll (Data Link Layer)              17,850         44,625.0            24.50%
+    u_lcrc (Parallel LCRC-32)           6,450         16,125.0             8.85%
+    u_dll_seq (Sequencing & Wrap)       5,800         14,500.0             7.96%
+    ACK/NAK & Replay Buffer             5,600         14,000.0             7.69%
+  u_phy (Physical Layer & PIPE)        16,240         40,600.0            22.29%
+    u_ltssm (LTSSM 8 GT/s FSM)          6,820         17,050.0             9.36%
+    u_scrambler (128b/130b LFSR)        5,120         12,800.0             7.03%
+    u_pipe_if (PIPE 4.3 Bridge)         4,300         10,750.0             5.90%
+  u_dma (Scatter-Gather DMA Engine)    15,140         37,850.0            20.78%
+    Descriptor Engine & AXI Master      9,420         23,550.0            12.93%
+    FIFO Buffers & Aligners             5,720         14,300.0             7.85%
+  Config & Status Registers             2,200          5,500.0             3.02%
+--------------------------------------------------------------------------------
+Total Equivalent Gate Count: 72,850 NAND2-equivalent gates
+Total Core Area:            182,125 um^2 (0.182 mm^2)
+Estimated Die Size:         1500 um x 1500 um (2.25 mm^2 including pad ring)
+Cell Count:                 19,480 standard cells
+================================================================================
