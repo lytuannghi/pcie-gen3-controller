@@ -86,7 +86,7 @@ The repository provides the complete ASIC design flow from synthesizable RTL to 
 
 ## Physical Design & Tape-Out Metrics
 
-The physical implementation targeted standard 65nm CMOS libraries with high-density cells.
+The physical layout targets the open-source SkyWater 130nm (`sky130`) layer deck (`layout/scripts/verify_gds_drc.py`).
 
 ### Layout Geometry
 - **Layout File:** `layout/gds/pcie_gen3_controller.gds`
