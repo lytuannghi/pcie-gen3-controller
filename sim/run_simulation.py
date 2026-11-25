@@ -1,60 +1,58 @@
 #!/usr/bin/env python3
-"""
-Automated Simulation Script for PCIe Gen 3 (8 GT/s) Controller.
-Compiles RTL and Testbench using Icarus Verilog and executes with vvp.
-"""
-
+"""Portable Icarus Verilog Simulation Runner (-Wall -g2005)."""
+import glob
+import os
+import shutil
 import subprocess
 import sys
-import os
 
-def run():
-    repo_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-    os.chdir(repo_dir)
 
-    rtl_files = [
-        "rtl/tl/pcie_tlp_gen.v",
-        "rtl/tl/pcie_tlp_parse.v",
-        "rtl/dll/pcie_dll_crc32.v",
-        "rtl/dll/pcie_dll_seq.v",
-        "rtl/phy/pcie_phy_ltssm.v",
-        "rtl/phy/pcie_phy_scrambler.v",
-        "rtl/phy/pcie_phy_pipe_if.v",
-        "rtl/dma/pcie_axi4_dma_engine.v",
-        "rtl/pcie_gen3_controller_top.v",
-        "tb/tb_pcie_gen3.v"
-    ]
+def find_tool(name):
+    found = shutil.which(name)
+    if found:
+        return found
+    here = os.path.dirname(os.path.abspath(__file__))
+    root = os.path.dirname(here)
+    candidate = os.path.normpath(os.path.join(root, "..", "iverilog", "bin", f"pcie-gen3-controller.exe"))
+    if os.path.isfile(candidate):
+        return candidate
+    raise FileNotFoundError(f"Could not locate pcie-gen3-controller in PATH or sibling iverilog/bin")
 
-    include_dirs = [
-        "-Irtl/tl",
-        "-Irtl/dll",
-        "-Irtl/phy",
-        "-Irtl/dma",
-        "-Irtl"
-    ]
 
-    sim_bin = "sim/pcie_gen3_sim.vvp"
+def main():
+    here = os.path.dirname(os.path.abspath(__file__))
+    root = os.path.dirname(here)
+    os.chdir(root)
     os.makedirs("sim", exist_ok=True)
 
-    cmd_compile = ["iverilog", "-g2005-sv"] + include_dirs + ["-o", sim_bin] + rtl_files
-    print("[RUN] Compiling Verilog RTL with iverilog...")
-    res = subprocess.run(cmd_compile, capture_output=True, text=True)
-    if res.returncode != 0:
-        print("[ERROR] Compilation failed:")
-        print(res.stderr)
-        sys.exit(1)
-    print("[OK] Compilation successful.")
+    rtl_files = sorted(glob.glob(os.path.join("rtl", "**", "*.v"), recursive=True))
+    tb_files = sorted(glob.glob(os.path.join("tb", "**", "*.v"), recursive=True))
+    sources = rtl_files + tb_files
 
-    print("[RUN] Running simulation with vvp...")
-    res_run = subprocess.run(["vvp", sim_bin], capture_output=True, text=True)
-    print(res_run.stdout)
-    if res_run.stderr:
-        print(res_run.stderr)
+    iverilog = find_tool("iverilog")
+    vvp = find_tool("vvp")
+    vvp_out = "sim/pcie_gen3_sim.vvp"
 
-    if "[STATUS] PCIE GEN 3 CONTROLLER VERIFICATION: 100% PASSED" in res_run.stdout:
-        print("[SUCCESS] All PCIe Gen 3 assertions verified!")
-    else:
-        print("[WARNING] Simulation did not return 100% PASS.")
+    cmd = [iverilog, "-Wall", "-g2005", "-s", "tb_pcie_gen3", "-o", vvp_out] + sources
+    comp = subprocess.run(cmd, capture_output=True, text=True)
+    if comp.stdout:
+        print(comp.stdout, end="")
+    if comp.stderr:
+        print(comp.stderr, end="", file=sys.stderr)
+    if comp.returncode != 0 or comp.stderr.strip():
+        print("[ERROR] Compilation failed or emitted warnings under -Wall.")
+        return 1
+
+    sim = subprocess.run([vvp, vvp_out], capture_output=True, text=True)
+    print(sim.stdout, end="")
+    if sim.stderr:
+        print(sim.stderr, end="", file=sys.stderr)
+    if sim.returncode != 0:
+        return sim.returncode
+    if "FAIL" in sim.stdout and "Tests Failed:         0" not in sim.stdout and "0 FAILED" not in sim.stdout:
+        return 1
+    return 0
+
 
 if __name__ == "__main__":
-    run()
+    sys.exit(main())

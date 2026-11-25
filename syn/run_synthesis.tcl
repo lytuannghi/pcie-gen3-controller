@@ -2,7 +2,7 @@
 # File: run_synthesis.tcl
 # Tool: Synopsys Design Compiler / Yosys Open-Source Flow
 # Project: PCIe Gen 3 (8 GT/s) Controller Subsystem
-# Target Library: TSMC 65nm GP / SkyWater 130nm Standard Cells
+# Target Library: SkyWater 130nm HD Standard Cells
 # =============================================================================
 
 puts "======================================================================"

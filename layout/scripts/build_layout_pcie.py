@@ -1,158 +1,119 @@
 #!/usr/bin/env python3
 """
-Physical Layout Generator for PCIe Gen 3 (8 GT/s) Controller Subsystem.
-Generates binary GDSII layout viewable in KLayout without external dependencies.
+SkyWater 130nm Multi-Layer Physical GDSII Layout Generator for pcie_gen3_controller_top.
+Produces a DRC-clean macro floorplan, dual M4/M5 power ring, standard-cell rails,
+I/O pad ring, and verifies all geometric rules with verify_gds_drc.py.
 """
-
-import struct
 import os
-import time
+import sys
 
-class GDSWriter:
-    def __init__(self, filename, libname="PCIE_GEN3_LIB"):
-        self.f = open(filename, "wb")
-        self.libname = libname
-        self._write_header()
+SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+if SCRIPT_DIR not in sys.path:
+    sys.path.insert(0, SCRIPT_DIR)
 
-    def _write_record(self, rec_type, data_type, data=b""):
-        rec_len = len(data) + 4
-        self.f.write(struct.pack(">HH", rec_len, (rec_type << 8) | data_type))
-        if data:
-            self.f.write(data)
-
-    def _write_header(self):
-        self._write_record(0x00, 0x02, struct.pack(">H", 600))
-        t = time.localtime()
-        time_data = struct.pack(">12H", t.tm_year, t.tm_mon, t.tm_mday, t.tm_hour, t.tm_min, t.tm_sec,
-                                       t.tm_year, t.tm_mon, t.tm_mday, t.tm_hour, t.tm_min, t.tm_sec)
-        self._write_record(0x01, 0x02, time_data)
-        libname_bytes = self.libname.encode("ascii")
-        if len(libname_bytes) % 2 != 0:
-            libname_bytes += b"\0"
-        self._write_record(0x02, 0x06, libname_bytes)
-        self._write_record(0x03, 0x05, struct.pack(">dd", 0.001, 1e-9))
-
-    def bgn_str(self, strname):
-        t = time.localtime()
-        time_data = struct.pack(">12H", t.tm_year, t.tm_mon, t.tm_mday, t.tm_hour, t.tm_min, t.tm_sec,
-                                       t.tm_year, t.tm_mon, t.tm_mday, t.tm_hour, t.tm_min, t.tm_sec)
-        self._write_record(0x05, 0x02, time_data)
-        str_bytes = strname.encode("ascii")
-        if len(str_bytes) % 2 != 0:
-            str_bytes += b"\0"
-        self._write_record(0x06, 0x06, str_bytes)
-
-    def end_str(self):
-        self._write_record(0x07, 0x00)
-
-    def add_box(self, layer, datatype, x1, y1, x2, y2):
-        self._write_record(0x08, 0x00)
-        self._write_record(0x0D, 0x02, struct.pack(">H", layer))
-        self._write_record(0x0E, 0x02, struct.pack(">H", datatype))
-        pts = [
-            (int(x1 * 1000), int(y1 * 1000)),
-            (int(x2 * 1000), int(y1 * 1000)),
-            (int(x2 * 1000), int(y2 * 1000)),
-            (int(x1 * 1000), int(y2 * 1000)),
-            (int(x1 * 1000), int(y1 * 1000))
-        ]
-        xy_data = b"".join(struct.pack(">ii", p[0], p[1]) for p in pts)
-        self._write_record(0x10, 0x03, xy_data)
-        self._write_record(0x11, 0x00)
-
-    def close(self):
-        self._write_record(0x04, 0x00)
-        self.f.close()
+from verify_gds_drc import GDSWriter, verify_gds
 
 
-def generate_pcie_layout():
-    out_dir = "layout/gds"
-    os.makedirs(out_dir, exist_ok=True)
-    gds_path = os.path.join(out_dir, "pcie_gen3_controller.gds")
+def build_layout():
+    layout_dir = os.path.dirname(SCRIPT_DIR)
+    gds_path = os.path.join(layout_dir, "gds", "pcie_gen3_controller.gds")
+    report_path = os.path.join(layout_dir, "reports", "drc_report.txt")
+    os.makedirs(os.path.dirname(gds_path), exist_ok=True)
+    os.makedirs(os.path.dirname(report_path), exist_ok=True)
 
-    gds = GDSWriter(gds_path, libname="PCIE_GEN3_CONTROLLER")
-    gds.bgn_str("pcie_gen3_controller_top")
+    die_w = 400000
+    die_h = 400000
+    macro_cols = 4
+    macro_rows = 4
+    pad_count = 12
 
-    # Layer Conventions:
-    # Layer 100: PR Boundary (1500um x 1500um)
-    # Layer 108: I/O Pads (70um x 80um)
-    # Layer 21: Metal 1 (Standard Cells)
-    # Layer 31: Metal 2 (Power Stripes Vertical)
-    # Layer 41: Metal 3 (Power Stripes Horizontal)
-    # Layer 51: Metal 4 (Power Ring & Global Clock Trunk)
+    L_DIE_AREA = 235
+    L_NWELL = 64
+    L_DIFF = 65
+    L_POLY = 66
+    L_CONTACT = 67
+    L_MET1 = 68
+    L_VIA1 = 69
+    L_MET2 = 70
+    L_VIA2 = 71
+    L_MET3 = 72
+    L_VIA3 = 73
+    L_MET4 = 74
+    L_VIA4 = 75
+    L_MET5 = 76
+    L_PAD = 108
 
-    # 1. Die Boundary
-    gds.add_box(100, 0, 0, 0, 1500, 1500)
+    gds = GDSWriter(gds_path, "PCIE_GEN3_LIB")
+    gds.start_structure("pcie_gen3_controller_top")
+    gds.add_box(L_DIE_AREA, 0, 0, 0, die_w, die_h)
 
-    # 2. I/O Pad Ring (64 pads)
-    pad_w = 60
-    pad_h = 80
-    for i in range(16):
-        x = 120 + i * 80
-        gds.add_box(108, 0, x, 10, x + pad_w, 10 + pad_h)       # Bottom
-        gds.add_box(108, 0, x, 1410, x + pad_w, 1410 + pad_h)  # Top
-    for i in range(16):
-        y = 120 + i * 80
-        gds.add_box(108, 0, 10, y, 10 + pad_h, y + pad_w)       # Left
-        gds.add_box(108, 0, 1410, y, 1410 + pad_h, y + pad_w)  # Right
+    RING_M = 28000
+    RING_W = 5000
+    CORE_X1 = RING_M + RING_W + 10000
+    CORE_Y1 = RING_M + RING_W + 10000
+    CORE_X2 = die_w - RING_M - RING_W - 10000
+    CORE_Y2 = die_h - RING_M - RING_W - 10000
 
-    # 3. Dual Power Ring (Metal 4 / Metal 3)
-    gds.add_box(51, 0, 125, 125, 1375, 145)
-    gds.add_box(51, 0, 125, 1355, 1375, 1375)
-    gds.add_box(51, 0, 125, 125, 145, 1375)
-    gds.add_box(51, 0, 1355, 125, 1375, 1375)
+    # Top & Bottom M5 rings; Left & Right M4 rings (bridged at corners via VIA4)
+    gds.add_box(L_MET5, 0, RING_M, RING_M, die_w - RING_M, RING_M + RING_W)
+    gds.add_box(L_MET5, 0, RING_M, die_h - RING_M - RING_W, die_w - RING_M, die_h - RING_M)
+    gds.add_box(L_MET4, 0, RING_M, RING_M, RING_M + RING_W, die_h - RING_M)
+    gds.add_box(L_MET4, 0, die_w - RING_M - RING_W, RING_M, die_w - RING_M, die_h - RING_M)
 
-    # 4. Functional IP Macros Floorplan:
-    # Macro A: Transaction Layer (TLP Gen & Parse - 450um x 400um)
-    gds.add_box(100, 1, 180, 180, 650, 580)
-    gds.add_box(21, 0, 190, 190, 400, 370) # TLP Generator
-    gds.add_box(21, 0, 410, 190, 640, 370) # TLP Parser
-    gds.add_box(21, 0, 190, 380, 640, 570) # Virtual Channel Buffers
+    for vx in (RING_M + 1000, die_w - RING_M - RING_W + 1000):
+        for vy in (RING_M + 1000, die_h - RING_M - RING_W + 1000):
+            gds.add_box(L_VIA4, 0, vx, vy, vx + 3000, vy + 3000)
 
-    # Macro B: Data Link Layer (DLL - 450um x 350um)
-    gds.add_box(100, 2, 690, 180, 1320, 580)
-    gds.add_box(21, 0, 700, 190, 990, 370)  # LCRC-32 Parallel Generator
-    gds.add_box(21, 0, 1000, 190, 1310, 370) # Sequence Number Logic
-    gds.add_box(21, 0, 700, 380, 1310, 570) # ACK/NAK & Replay Buffer SRAM
+    # Perimeter Wirebond Pads
+    PAD_W, PAD_H = 12000, 12000
+    span_x = (CORE_X2 - CORE_X1) // pad_count
+    span_y = (CORE_Y2 - CORE_Y1) // pad_count
+    for i in range(pad_count):
+        px = CORE_X1 + i * span_x + (span_x - PAD_W) // 2
+        gds.add_box(L_PAD, 0, px, 6000, px + PAD_W, 6000 + PAD_H)
+        gds.add_box(L_PAD, 0, px, die_h - 6000 - PAD_H, px + PAD_W, die_h - 6000)
+        py = CORE_Y1 + i * span_y + (span_y - PAD_H) // 2
+        gds.add_box(L_PAD, 0, 6000, py, 6000 + PAD_W, py + PAD_H)
+        gds.add_box(L_PAD, 0, die_w - 6000 - PAD_W, py, die_w - 6000, py + PAD_H)
 
-    # Macro C: Physical Layer & PIPE Interface (450um x 380um)
-    gds.add_box(100, 3, 180, 620, 650, 1000)
-    gds.add_box(21, 0, 190, 630, 410, 800)  # LTSSM FSM
-    gds.add_box(21, 0, 420, 630, 640, 800)  # 128b/130b Scrambler
-    gds.add_box(21, 0, 190, 810, 640, 990)  # PIPE 4.3 SerDes Interface
+    # Non-overlapping Subsystem Macro Grid
+    mw = (CORE_X2 - CORE_X1 - (macro_cols - 1) * 14000) // macro_cols
+    mh = (CORE_Y2 - CORE_Y1 - (macro_rows - 1) * 14000) // macro_rows
+    for r in range(macro_rows):
+        for c in range(macro_cols):
+            mx1 = CORE_X1 + c * (mw + 14000)
+            my1 = CORE_Y1 + r * (mh + 14000)
+            mx2 = mx1 + mw
+            my2 = my1 + mh
+            gds.add_box(L_NWELL, 0, mx1 + 2000, my1 + 2000, mx2 - 2000, my1 + mh // 2)
+            gds.add_box(L_DIFF, 0, mx1 + 3500, my1 + 3500, mx2 - 3500, my1 + 11500)
+            gds.add_box(L_POLY, 0, mx1 + 5000, my1 + 2800, mx1 + 6500, my1 + 12500)
+            gds.add_box(L_CONTACT, 0, mx1 + 8500, my1 + 5500, mx1 + 10000, my1 + 7000)
+            # Horizontal M1 rail strips (spacing >= 1200nm)
+            for ry in range(my1 + 15000, my2 - 6000, 4000):
+                gds.add_box(L_MET1, 0, mx1 + 3000, ry, mx2 - 3000, ry + 1500)
+            # Vertical M2 local buses (non-overlapping with adjacent columns)
+            for bx in range(mx1 + 12000, mx2 - 12000, 12000):
+                gds.add_box(L_MET2, 0, bx, my1 + 14000, bx + 2000, my2 - 6000)
 
-    # Macro D: Scatter-Gather DMA Subsystem (600um x 380um)
-    gds.add_box(100, 4, 690, 620, 1320, 1000)
-    gds.add_box(21, 0, 700, 630, 990, 800)  # Descriptor Ring Engine
-    gds.add_box(21, 0, 1000, 630, 1310, 800) # AXI4 Master Bridge
-    gds.add_box(21, 0, 700, 810, 1310, 990) # Data FIFOs & Aligners
+    # Global M3 Interconnect Channels strictly between macro columns
+    for c in range(1, macro_cols):
+        cx = CORE_X1 + c * (mw + 14000) - 9000
+        gds.add_box(L_MET3, 0, cx, CORE_Y1, cx + 3000, CORE_Y2)
+        gds.add_box(L_MET3, 0, cx + 6000, CORE_Y1, cx + 9000, CORE_Y2)
 
-    # Macro E: Configuration Space & Status Registers
-    gds.add_box(100, 5, 180, 1040, 1320, 1330)
-    gds.add_box(21, 0, 190, 1050, 740, 1320) # PCIe Base Specs Config Headers
-    gds.add_box(21, 0, 760, 1050, 1310, 1320) # BAR0 & MSI-X Capabilities
-
-    # 5. Core Standard Cell Rows
-    for row in range(55):
-        y = 180 + row * 21
-        gds.add_box(21, 1, 180, y, 1320, y + 8)
-
-    # 6. Power Grid
-    for sx in range(14):
-        x = 210 + sx * 80
-        gds.add_box(31, 0, x, 170, x + 6, 1340)
-    for sy in range(14):
-        y = 210 + sy * 80
-        gds.add_box(41, 0, 170, y, 1340, y + 6)
-
-    # 7. Symmetrical H-Tree Clock Trunk (Metal 4)
-    gds.add_box(51, 1, 740, 180, 760, 1330)
-    gds.add_box(51, 1, 180, 740, 1320, 760)
-
-    gds.end_str()
+    gds.end_structure()
     gds.close()
 
-    print(f"[OK] Generated GDSII: {gds_path} ({os.path.getsize(gds_path)} bytes)")
+    total_v = verify_gds(
+        gds_path=gds_path,
+        report_path=report_path,
+        top_name="pcie_gen3_controller_top",
+        tech_name="SkyWater 130nm",
+    )
+    print(f"[OK] Generated {gds_path} ({os.path.getsize(gds_path)} bytes), DRC violations={total_v}")
+    return 0 if total_v == 0 else 1
+
 
 if __name__ == "__main__":
-    generate_pcie_layout()
+    sys.exit(build_layout())

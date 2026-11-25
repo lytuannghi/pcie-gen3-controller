@@ -87,7 +87,7 @@ module tb_pcie_gen3;
     integer pass_count = 0;
     integer fail_count = 0;
 
-    task test_check(input reg condition, input [255:0] test_name);
+    task test_check(input reg condition, input [80*8-1:0] test_name);
     begin
         if (condition) begin
             $display("[PASS] %0s", test_name);
@@ -152,7 +152,26 @@ module tb_pcie_gen3;
         // Test 5: Gen 3 8.0 GT/s Speed Negotiation
         test_check(gen3_active === 1'b1 && pipe_rate === 2'b10, "Test 5: PCIe Gen 3 (8.0 GT/s) Rate Negotiation Active");
 
-        // Test 6: Inbound TLP Configuration Write (MWr 3DW with Payload)
+        // Test 6: Inbound TLP Configuration Write (BAR 0x14 TX Payload + BAR 0x00 Trigger)
+        // First write BAR offset 0x0000_0014 with custom payload 32'h1234_ABCD
+        @(negedge sys_clk);
+        pipe_rx_valid = 1;
+        pipe_rx_datak = 4'b0001; // SOP
+        pipe_rx_data  = {1'b0, 7'b10_00000, 8'h00, 6'd0, 10'd1};
+        @(negedge sys_clk);
+        pipe_rx_datak = 4'b0000;
+        pipe_rx_data  = {16'h0001, 8'h02, 8'hFF};
+        @(negedge sys_clk);
+        pipe_rx_datak = 4'b0000;
+        pipe_rx_data  = 32'h0000_0014; // BAR offset 0x14: dma_tx_data
+        @(negedge sys_clk);
+        pipe_rx_datak = 4'b1000; // EOP
+        pipe_rx_data  = 32'h1234_ABCD;
+        @(negedge sys_clk);
+        pipe_rx_valid = 0;
+        pipe_rx_datak = 4'b0000;
+        #8;
+
         // Cycle 1: DW0: Fmt=2'b10 (0x40), Length=1
         @(negedge sys_clk);
         pipe_rx_valid = 1;
@@ -166,7 +185,7 @@ module tb_pcie_gen3;
         @(negedge sys_clk);
         pipe_rx_datak = 4'b0000;
         pipe_rx_data  = 32'h0000_0000;
-        // Cycle 4: DW3: Payload = 0x0000_0001 (Start H2C DMA) + EOP
+        // Cycle 4: DW3: Payload = 0x0000_0001 (Start DMA MWr) + EOP
         @(negedge sys_clk);
         pipe_rx_datak = 4'b1000; // EOP
         pipe_rx_data  = 32'h0000_0001;
@@ -207,6 +226,46 @@ module tb_pcie_gen3;
         #8;
         test_check(dut.u_dma.m_axi_wdata === 32'hBEEF_CAFE || dut.u_dma.m_axi_wvalid === 1'b1,
                    "Test 10: Inbound CplD Translates to AXI4 Master Burst Write");
+
+        // Wait for H2C DMA completion after CplD, then Test 11: C2H MWr using BAR 0x14 Payload
+        #20;
+        @(negedge sys_clk);
+        pipe_rx_valid = 1;
+        pipe_rx_datak = 4'b0001; // SOP
+        pipe_rx_data  = {1'b0, 7'b10_00000, 8'h00, 6'd0, 10'd1};
+        @(negedge sys_clk);
+        pipe_rx_datak = 4'b0000;
+        pipe_rx_data  = {16'h0001, 8'h03, 8'hFF};
+        @(negedge sys_clk);
+        pipe_rx_datak = 4'b0000;
+        pipe_rx_data  = 32'h0000_0010; // BAR offset 0x10: dma_len_dw = 1
+        @(negedge sys_clk);
+        pipe_rx_datak = 4'b1000; // EOP
+        pipe_rx_data  = 32'h0000_0001;
+        @(negedge sys_clk);
+        pipe_rx_valid = 0;
+        pipe_rx_datak = 4'b0000;
+        #8;
+
+        @(negedge sys_clk);
+        pipe_rx_valid = 1;
+        pipe_rx_datak = 4'b0001; // SOP
+        pipe_rx_data  = {1'b0, 7'b10_00000, 8'h00, 6'd0, 10'd1};
+        @(negedge sys_clk);
+        pipe_rx_datak = 4'b0000;
+        pipe_rx_data  = {16'h0001, 8'h04, 8'hFF};
+        @(negedge sys_clk);
+        pipe_rx_datak = 4'b0000;
+        pipe_rx_data  = 32'h0000_0000; // BAR offset 0x00: dma_ctrl = 0x03 (Start C2H MWr)
+        @(negedge sys_clk);
+        pipe_rx_datak = 4'b1000; // EOP
+        pipe_rx_data  = 32'h0000_0003;
+        @(negedge sys_clk);
+        pipe_rx_valid = 0;
+        pipe_rx_datak = 4'b0000;
+        #24;
+        test_check(dut.u_dma.dma_tx_data === 32'h1234_ABCD && dut.u_dma.tlp_req_wdata === 32'h1234_ABCD,
+                   "Test 11: C2H DMA MWr TLP Reflects Programmable BAR 0x14 Payload");
 
         // Final verification summary
         #300;

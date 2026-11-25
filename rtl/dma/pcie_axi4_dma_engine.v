@@ -56,10 +56,12 @@ module pcie_axi4_dma_engine (
     // 0x08: PCIe Source / Dest Address
     // 0x0C: AXI Source / Dest Address
     // 0x10: Transfer Length in Dwords
+    // 0x14: Programmable TX Payload Dword
     reg [31:0] dma_ctrl;
     reg [31:0] dma_pcie_addr;
     reg [31:0] dma_axi_addr;
     reg [9:0]  dma_len_dw;
+    reg [31:0] dma_tx_data;
     reg [9:0]  transferred_dw;
     reg        dma_busy;
 
@@ -87,6 +89,7 @@ module pcie_axi4_dma_engine (
             dma_pcie_addr  <= 32'd0;
             dma_axi_addr   <= 32'd0;
             dma_len_dw     <= 10'd0;
+            dma_tx_data    <= 32'hA5A5_5A5A;
         end else begin
             // Register writes
             if (reg_wr) begin
@@ -95,6 +98,7 @@ module pcie_axi4_dma_engine (
                     8'h08: dma_pcie_addr <= reg_wdata;
                     8'h0C: dma_axi_addr  <= reg_wdata;
                     8'h10: dma_len_dw    <= reg_wdata[9:0];
+                    8'h14: dma_tx_data   <= reg_wdata;
                     default: ;
                 endcase
             end
@@ -118,7 +122,7 @@ module pcie_axi4_dma_engine (
                             tlp_req_type  <= 2'b00; // MWr
                             tlp_req_addr  <= dma_pcie_addr;
                             tlp_req_len   <= dma_len_dw;
-                            tlp_req_wdata <= 32'hA5A5_5A5A; // Data from AXI SRAM
+                            tlp_req_wdata <= dma_tx_data; // Programmable BAR 0x14 payload
                             tlp_req_wlast <= 1'b1;
                             dma_state     <= DMA_WRITE;
                         end
@@ -170,6 +174,7 @@ module pcie_axi4_dma_engine (
             8'h08: reg_rdata = dma_pcie_addr;
             8'h0C: reg_rdata = dma_axi_addr;
             8'h10: reg_rdata = {22'd0, dma_len_dw};
+            8'h14: reg_rdata = dma_tx_data;
             default: reg_rdata = 32'd0;
         endcase
     end

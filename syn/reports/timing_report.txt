@@ -1,47 +1,11 @@
 ================================================================================
-Information: Static Timing Analysis Report
-Design:      pcie_gen3_controller_top
-Technology:  TSMC 65nm GP Standard Performance / Sky130
-Operating:   Typical (VDD = 1.20V, TJ = 25C)
-Clock:       sys_clk (Target Period: 4.000 ns / 250.0 MHz)
+SDC TIMING CONSTRAINT & RTL REGISTER AUDIT: pcie_gen3_controller_top
+Constraint File: syn/pcie_timing.sdc
+Target Clock:    250.0 MHz (Period = 4.000 ns)
+Note: Verified constraints parsed from SDC and static RTL sensitivity audit.
+      Post-synthesis gate-level STA slack requires external OpenSTA execution.
 ================================================================================
 
---------------------------------------------------------------------------------
-Setup Timing Summary (Max Path - Critical Path: u_dll/u_lcrc to u_dll/phy_tx_data_reg)
---------------------------------------------------------------------------------
-Clock sys_clk (rise edge)                                4.000         4.000
-Clock network delay (ideal)                              0.000         4.000
-Clock uncertainty                                       -0.150         3.850
-u_dll/phy_tx_data_reg[31]/D (DFF)                        0.000         3.850
-Library setup time                                      -0.075         3.775
-data required time                                                     3.775
---------------------------------------------------------------------------------
-data required time                                                     3.775
-data arrival time                                                     -3.565
---------------------------------------------------------------------------------
-slack (MET)                                                           +0.210 ns
-
-Fmax (Maximum Achievable Core Frequency): 263.85 MHz (Critical Path = 3.790 ns)
-
---------------------------------------------------------------------------------
-Hold Timing Summary (Min Path: u_ltssm/state_timer_reg[0] to u_ltssm/state_timer_reg[0])
---------------------------------------------------------------------------------
-Clock sys_clk (rise edge)                                0.000         0.000
-Clock network delay (ideal)                              0.000         0.000
-Clock uncertainty                                        0.060         0.060
-u_ltssm/state_timer_reg[0]/D (DFF)                       0.000         0.060
-Library hold time                                        0.042         0.102
-data required time                                                     0.102
---------------------------------------------------------------------------------
-data arrival time                                                      0.222
-data required time                                                    -0.102
---------------------------------------------------------------------------------
-slack (MET)                                                           +0.120 ns
-
---------------------------------------------------------------------------------
-Timing Checks:
-  Setup Violations: 0
-  Hold Violations:  0
-  Pulse Width Violations: 0
-  Design Timing Status: 100% TIMING MET (Positive Slack)
-================================================================================
+1. SDC Clock Target: 250.0 MHz (4.000 ns)
+2. Combinational Operators: Zero combinational / or % operators verified by analyze_rtl.py.
+3. Simulation Status: Verified 100% functional pass under iverilog -Wall -g2005.

@@ -1,0 +1,27 @@
+================================================================================
+RTL SYNTHESIS READINESS & CONSTRAINT REPORT: pcie-gen3-controller
+Method : Static Verilog/SV Structural Parser + SDC Constraint Audit
+Note   : Foundry Gate-Level Netlist & STA require PDK Liberty (.lib) + Synopsys/OpenROAD
+================================================================================
+RTL Source Files Inspected : 9
+Code Lines (Non-Comment)   : 840
+Sequential Blocks          : 8
+Combinational Blocks       : 2
+Declared reg/logic Signals : 70
+
+MODULE BREAKDOWN:
+  rtl\dll\pcie_dll_crc32.v                      | modules=pcie_dll_crc32               | loc=  43 | seq= 1 | comb= 0
+  rtl\dll\pcie_dll_seq.v                        | modules=pcie_dll_seq                 | loc=  77 | seq= 1 | comb= 0
+  rtl\dma\pcie_axi4_dma_engine.v                | modules=pcie_axi4_dma_engine         | loc= 143 | seq= 1 | comb= 1
+  rtl\pcie_gen3_controller_top.v                | modules=pcie_gen3_controller_top     | loc= 195 | seq= 0 | comb= 0
+  rtl\phy\pcie_phy_ltssm.v                      | modules=pcie_phy_ltssm               | loc=  99 | seq= 1 | comb= 0
+  rtl\phy\pcie_phy_pipe_if.v                    | modules=pcie_phy_pipe_if             | loc=  42 | seq= 1 | comb= 0
+  rtl\phy\pcie_phy_scrambler.v                  | modules=pcie_phy_scrambler           | loc=  53 | seq= 1 | comb= 0
+  rtl\tl\pcie_tlp_gen.v                         | modules=pcie_tlp_gen                 | loc= 104 | seq= 1 | comb= 1
+  rtl\tl\pcie_tlp_parse.v                       | modules=pcie_tlp_parse               | loc=  84 | seq= 1 | comb= 0
+
+SDC CLOCK CONSTRAINTS:
+  pcie_timing.sdc: port=clk | period=4.00 ns | target=250.00 MHz
+
+ARITHMETIC DIVISION/MODULO CHECK: CLEAN (0 combinational / or % operators)
+================================================================================
